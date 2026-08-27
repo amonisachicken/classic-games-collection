@@ -4,6 +4,7 @@ use crate::app::Engine;
 use crate::canvas::{col, str_width};
 use crate::games::GameId;
 use crate::input::Action;
+use crate::lang::{self, Lang};
 use std::time::Duration;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -59,13 +60,13 @@ fn item_line(id: GameId, scores: &crate::score::ScoreFile) -> String {
                 }
             }
             match best {
-                Some((u, w)) => format!("胜 {w} 负 {best_loss}  ({u})"),
-                None => "暂无战绩".to_string(),
+                Some((u, w)) => lang::fmt(lang::ui().record_fmt, &[&w, &best_loss, &u]),
+                None => lang::ui().no_stats.to_string(),
             }
         }
         _ => match scores.get_vec(id.score_key()).first() {
-            Some(e) => format!("最高 {}  ({})", e.score, e.user),
-            None => "暂无纪录".to_string(),
+            Some(e) => lang::fmt(lang::ui().best_fmt, &[&e.score, &e.user]),
+            None => lang::ui().no_record.to_string(),
         },
     }
 }
@@ -78,10 +79,10 @@ fn draw(eng: &mut Engine, sel: usize) {
     let mut row = 1usize;
 
     // 标题
-    let t1 = "◆ 经典游戏合集 ◆";
+    let t1 = lang::ui().title;
     c.put_str(cx - str_width(t1) / 2, row, t1, col::YELLOW, col::BLACK);
     row += 1;
-    let t2 = "CLASSIC GAMES 5-in-1";
+    let t2 = lang::ui().subtitle;
     c.put_str(cx - str_width(t2) / 2, row, t2, col::CYAN, col::BLACK);
     row += 2;
 
@@ -89,7 +90,7 @@ fn draw(eng: &mut Engine, sel: usize) {
     for (i, id) in GameId::ALL.iter().enumerate() {
         let selected = i == sel;
         let num = format!("{}.", i + 1);
-        let name = format!("{} ({})", id.name(), id.name_en());
+        let name = id.display_name();
         let best = item_line(*id, eng.scores);
         // 计算行宽
         let pad = 2usize;
@@ -117,17 +118,17 @@ fn draw(eng: &mut Engine, sel: usize) {
     }
 
     // 设置用户名 / 退出
-    for (i, (label, label_en)) in [
-        ("设置用户名", "Change User"),
-        ("退出", "Quit"),
-    ]
-    .iter()
-    .enumerate()
-    {
+    let setting_labels: [(&str, &str); 2] =
+        [(lang::ui().change_user, "Change User"), (lang::ui().quit, "Quit")];
+    for (i, (label, label_en)) in setting_labels.iter().enumerate() {
         let idx = 5 + i;
         let selected = idx == sel;
         let bg = if selected { col::DARK_BLUE } else { col::BLACK };
-        let line = format!("{}. {} ({})", idx + 1, label, label_en);
+        let line = if lang::lang() == Lang::Zh {
+            format!("{}. {} ({})", idx + 1, label, label_en)
+        } else {
+            format!("{}. {}", idx + 1, label_en)
+        };
         let x = cx.saturating_sub(str_width(&line) / 2);
         c.fill_rect(x, row, str_width(&line) + 4, 1, ' ', col::BLACK, bg);
         if selected {
@@ -143,12 +144,12 @@ fn draw(eng: &mut Engine, sel: usize) {
         row += 1;
     }
 
-    let user = format!("玩家: {}", eng.user);
+    let user = lang::fmt(lang::ui().player_fmt, &[&eng.user]);
     c.put_str(cx - str_width(&user) / 2, row, &user, col::CYAN, col::BLACK);
 
     // 底部操作说明
-    let help1 = "↑↓ / HJKL 选择    回车 / 空格 进入    ESC / Q 退出";
-    let help2 = "游戏中: ESC / Q 暂停,  Ctrl+C 随时退出";
+    let help1 = lang::ui().menu_help1;
+    let help2 = lang::ui().menu_help2;
     let hy = c.h.saturating_sub(3);
     c.put_str(cx - str_width(help1) / 2, hy, help1, col::GRAY, col::BLACK);
     c.put_str(cx - str_width(help2) / 2, hy + 1, help2, col::GRAY, col::BLACK);

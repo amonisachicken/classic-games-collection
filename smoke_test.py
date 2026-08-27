@@ -14,7 +14,7 @@ TERM = os.environ.get("TERM", "xterm-256color")
 
 
 class Driver:
-    def __init__(self):
+    def __init__(self, lang="zh_CN.UTF-8"):
         self.master, slave = pty.openpty()
         # 设置伪终端窗口尺寸，确保 terminal::size() 正常返回
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 32, 110, 0, 0))
@@ -22,6 +22,7 @@ class Driver:
         import subprocess
         env = dict(os.environ)
         env["TERM"] = TERM
+        env["LANG"] = lang
         env["HOME"] = "/tmp/smoke_home"
         os.makedirs(env["HOME"], exist_ok=True)
         self.proc = subprocess.Popen(
@@ -204,6 +205,19 @@ def main():
         data = json.load(open(p))
         assert data.get("user"), "user 未保存"
         print(f"[ok] 分数文件已写入: {p}")
+
+        # 12. 英文模式(LANG=en_US): 已有用户, 直接进入菜单, 界面应显示英文
+        d.close()
+        d = Driver(lang="en_US.UTF-8")
+        v = step_text(d, "", 1.2)
+        assert "Classic Games Collection" in v, f"英文标题: {v[:150]!r}"
+        for g in ["Snake", "Breakout", "Tetris", "Plane", "Gomoku", "Quit"]:
+            assert g in v, f"英文菜单缺少 {g}"
+        assert not has_cjk(v, "贪吃蛇"), "英文界面不应出现中文"
+        print("[ok] 英文模式(LANG=en_US)界面正常")
+        v = step_text(d, "q", 0.7)
+        assert d.proc.poll() is not None, "英文模式退出失败"
+        print("[ok] 英文模式正常退出")
 
     except AssertionError as e:
         ok = False

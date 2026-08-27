@@ -4,6 +4,7 @@ use crate::app::Engine;
 use crate::canvas::{col, str_width, Canvas};
 use crate::games::{Game, GameOutcome, Status};
 use crate::input::Action;
+use crate::lang;
 use crate::score::ScoreFile;
 
 /// 场地几何（单元 = 1 字符格）。
@@ -258,14 +259,14 @@ impl Game for Breakout {
             c.put(ox + bx as usize, oy + by as usize, '●', col::WHITE, col::BLACK);
         }
         // 面板
-        let title = "打砖块 BREAKOUT";
-        let score = format!("得分 {}", self.score);
-        let lives = format!("生命 {}", "♥".repeat(self.lives.max(0) as usize));
+        let title = lang::ui().breakout_title;
+        let score = lang::fmt(lang::ui().score_fmt, &[&self.score]);
+        let lives = lang::fmt(lang::ui().lives_fmt, &[&"♥".repeat(self.lives.max(0) as usize)]);
         let high = scores
             .get_vec("breakout")
             .first()
-            .map(|e| format!("最高 {} ({})", e.score, e.user))
-            .unwrap_or_else(|| "暂无纪录".to_string());
+            .map(|e| lang::fmt(lang::ui().best_fmt, &[&e.score, &e.user]))
+            .unwrap_or_else(|| lang::ui().no_record.to_string());
         let py = oy.saturating_sub(2);
         c.put_str(ox, py, title, col::YELLOW, col::BLACK);
         c.put_str(ox, py + 1, &score, col::GREEN, col::BLACK);
@@ -274,9 +275,9 @@ impl Game for Breakout {
         c.put_str(hx, py, &high, col::GRAY, col::BLACK);
 
         let help = if self.ready && self.ball.is_none() {
-            "←→/HL 移动    空格 发球    ESC/Q 菜单"
+            lang::ui().breakout_help_ready
         } else {
-            "←→/HL 移动    ESC/Q 菜单"
+            lang::ui().breakout_help
         };
         c.put_str(ox, oy + FIELD_H + 1, help, col::GRAY, col::BLACK);
     }

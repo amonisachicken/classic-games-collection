@@ -4,6 +4,7 @@ use crate::app::Engine;
 use crate::canvas::{col, Canvas};
 use crate::games::{Game, GameOutcome, Status};
 use crate::input::Action;
+use crate::lang;
 use crate::score::ScoreFile;
 use rand::Rng;
 
@@ -336,24 +337,24 @@ impl Game for Tetris {
         // 面板
         let px = ox + W + 2 + 2;
         let mut py = oy;
-        c.put_str(px, py, "俄罗斯方块", col::YELLOW, col::BLACK);
+        c.put_str(px, py, lang::ui().tetris_title, col::YELLOW, col::BLACK);
         py += 1;
-        c.put_str(px, py, "TETRIS", col::CYAN, col::BLACK);
+        c.put_str(px, py, lang::ui().tetris_sub, col::CYAN, col::BLACK);
         py += 2;
-        c.put_str(px, py, &format!("得分 {}", self.score), col::GREEN, col::BLACK);
+        c.put_str(px, py, &lang::fmt(lang::ui().score_fmt, &[&self.score]), col::GREEN, col::BLACK);
         py += 1;
-        c.put_str(px, py, &format!("行数 {}", self.lines), col::WHITE, col::BLACK);
+        c.put_str(px, py, &lang::fmt(lang::ui().lines_fmt, &[&self.lines]), col::WHITE, col::BLACK);
         py += 1;
-        c.put_str(px, py, &format!("等级 {}", self.level), col::MAGENTA, col::BLACK);
+        c.put_str(px, py, &lang::fmt(lang::ui().level_fmt, &[&self.level]), col::MAGENTA, col::BLACK);
         py += 1;
         if let Some(e) = scores.get_vec("tetris").first() {
-            c.put_str(px, py, &format!("最高 {}", e.score), col::GRAY, col::BLACK);
+            c.put_str(px, py, &lang::fmt(lang::ui().best_short_fmt, &[&e.score]), col::GRAY, col::BLACK);
             py += 1;
             c.put_str(px, py, &format!("({})", e.user), col::GRAY, col::BLACK);
             py += 1;
         }
         py += 1;
-        c.put_str(px, py, "下一个", col::WHITE, col::BLACK);
+        c.put_str(px, py, lang::ui().next, col::WHITE, col::BLACK);
         py += 1;
         // 预览
         let cells = SHAPES[self.next_kind as usize][0];
@@ -369,13 +370,7 @@ impl Game for Tetris {
             );
         }
         py += 4;
-        let help = [
-            "←→ / HL  左右移动",
-            "↑ / K     旋转",
-            "↓ / J     加速下落",
-            "空格       直落",
-            "ESC/Q      暂停",
-        ];
+        let help = lang::ui().tetris_help;
         for h in help {
             c.put_str(px, py, h, col::GRAY, col::BLACK);
             py += 1;

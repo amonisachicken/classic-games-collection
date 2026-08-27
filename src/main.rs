@@ -8,12 +8,16 @@ mod app;
 mod canvas;
 mod games;
 mod input;
+mod lang;
 mod menu;
 mod score;
 
 use std::io;
 
 fn main() {
+    // 读取 $LANG 确定界面语言
+    lang::init();
+
     // 先加载分数文件再进入原始模式，避免意外崩溃丢数据
     let mut scores = score::ScoreFile::load();
 
@@ -21,7 +25,7 @@ fn main() {
     let guard = match app::TermGuard::new() {
         Ok(g) => g,
         Err(_) => {
-            eprintln!("错误: 无法进入终端模式，请确认在真实终端（非管道）中运行本程序。");
+            eprintln!("{}", lang::ui().err_no_term);
             std::process::exit(1);
         }
     };
@@ -29,7 +33,7 @@ fn main() {
     let mut eng = match app::Engine::new(&mut scores) {
         Ok(e) => e,
         Err(e) => {
-            eprintln!("错误: 初始化终端失败: {}", e);
+            eprintln!("{}", lang::ui().err_init_term.replace("{}", &e.to_string()));
             std::process::exit(1);
         }
     };

@@ -4,6 +4,7 @@ use crate::app::Engine;
 use crate::canvas::{col, str_width, Canvas};
 use crate::games::{Game, GameOutcome, Status};
 use crate::input::Action;
+use crate::lang;
 use crate::score::ScoreFile;
 use rand::Rng;
 use std::collections::VecDeque;
@@ -158,13 +159,13 @@ impl Game for Snake {
         self.draw_board(c, ox, oy);
 
         // 顶部面板
-        let title = "贪吃蛇 SNAKE";
-        let score = format!("得分 {}", self.score);
+        let title = lang::ui().snake_title;
+        let score = lang::fmt(lang::ui().score_fmt, &[&self.score]);
         let high = scores
             .get_vec("snake")
             .first()
-            .map(|e| format!("最高 {} ({})", e.score, e.user))
-            .unwrap_or_else(|| "暂无纪录".to_string());
+            .map(|e| lang::fmt(lang::ui().best_fmt, &[&e.score, &e.user]))
+            .unwrap_or_else(|| lang::ui().no_record.to_string());
         let py = oy.saturating_sub(2);
         c.put_str(ox, py, title, col::YELLOW, col::BLACK);
         c.put_str(ox, py + 1, &score, col::GREEN, col::BLACK);
@@ -172,11 +173,11 @@ impl Game for Snake {
         c.put_str(hx, py, &high, col::GRAY, col::BLACK);
 
         // 底部提示
-        let help = "方向键/HJKL 移动   空格 暂停    ESC/Q 菜单";
+        let help = lang::ui().snake_help;
         c.put_str(ox, oy + BH + 3, help, col::GRAY, col::BLACK);
 
         if self.paused {
-            let t = "已暂停 (空格继续)";
+            let t = lang::ui().snake_paused;
             let px = ox + (BW + 2 - str_width(t)) / 2;
             let py2 = oy + BH / 2;
             c.put_str(px, py2, t, col::YELLOW, col::BLACK);

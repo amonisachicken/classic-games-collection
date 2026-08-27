@@ -9,6 +9,7 @@ pub mod tetris;
 use crate::app::Engine;
 use crate::canvas::Canvas;
 use crate::input::Action;
+use crate::lang::{self, Lang};
 use crate::score::ScoreFile;
 
 /// 游戏进行状态。
@@ -51,12 +52,22 @@ impl GameId {
     ];
 
     pub fn name(&self) -> &'static str {
+        let u = lang::ui();
         match self {
-            GameId::Snake => "贪吃蛇",
-            GameId::Breakout => "打砖块",
-            GameId::Tetris => "俄罗斯方块",
-            GameId::Plane => "飞机大战",
-            GameId::Gomoku => "五子棋",
+            GameId::Snake => u.game_snake,
+            GameId::Breakout => u.game_breakout,
+            GameId::Tetris => u.game_tetris,
+            GameId::Plane => u.game_plane,
+            GameId::Gomoku => u.game_gomoku,
+        }
+    }
+
+    /// 菜单/标题用的显示名：中文界面显示"贪吃蛇 (Snake)"，英文界面显示"Snake"。
+    pub fn display_name(&self) -> String {
+        if lang::lang() == Lang::Zh {
+            format!("{} ({})", self.name(), self.name_en())
+        } else {
+            self.name_en().to_string()
         }
     }
 
@@ -83,12 +94,13 @@ impl GameId {
 
     /// 一句游戏简介。
     pub fn desc(&self) -> &'static str {
+        let u = lang::ui();
         match self {
-            GameId::Snake => "吃食物变长，别撞墙别咬到自己",
-            GameId::Breakout => "接住小球，打碎所有砖块",
-            GameId::Tetris => "消行得分，方块越落越快",
-            GameId::Plane => "移动射击，躲避敌机",
-            GameId::Gomoku => "五子连珠，人机对战",
+            GameId::Snake => u.desc_snake,
+            GameId::Breakout => u.desc_breakout,
+            GameId::Tetris => u.desc_tetris,
+            GameId::Plane => u.desc_plane,
+            GameId::Gomoku => u.desc_gomoku,
         }
     }
 

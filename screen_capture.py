@@ -142,6 +142,7 @@ def drive(keys_script):
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", H, W, 0, 0))
     env = dict(os.environ)
     env["TERM"] = "xterm-256color"
+    env["LANG"] = os.environ.get("CAP_LANG", "zh_CN.UTF-8")
     env["HOME"] = "/tmp/shot_home"
     os.makedirs(env["HOME"], exist_ok=True)
     p = subprocess.Popen(

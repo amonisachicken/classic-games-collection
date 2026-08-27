@@ -4,6 +4,7 @@ use crate::app::Engine;
 use crate::canvas::{col, Canvas};
 use crate::games::{Game, GameOutcome, Status};
 use crate::input::Action;
+use crate::lang;
 use crate::score::ScoreFile;
 use rand::Rng;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -305,28 +306,28 @@ impl Game for Gomoku {
         // 右侧面板
         let px = ox + 2 * N + 3;
         let mut py = oy;
-        c.put_str(px, py, "五子棋 GOMOKU", col::YELLOW, col::BLACK);
+        c.put_str(px, py, lang::ui().gomoku_title, col::YELLOW, col::BLACK);
         py += 2;
-        c.put_str(px, py, "你: X (先手)", col::GREEN, col::BLACK);
+        c.put_str(px, py, lang::ui().you_first, col::GREEN, col::BLACK);
         py += 1;
-        c.put_str(px, py, "AI: O", col::RED, col::BLACK);
+        c.put_str(px, py, lang::ui().ai_stone, col::RED, col::BLACK);
         py += 2;
         let st = scores.gomoku_stats(user);
-        let stat = format!("战绩: {} 胜 / {} 负", st.wins, st.losses);
+        let stat = lang::fmt(lang::ui().stat_fmt, &[&st.wins, &st.losses]);
         c.put_str(px, py, &stat, col::CYAN, col::BLACK);
         py += 2;
         let turn_txt = if self.over {
             if self.draw {
-                "平局"
+                lang::ui().draw
             } else if self.win {
-                "你赢了!"
+                lang::ui().you_win
             } else {
-                "你输了"
+                lang::ui().you_lose
             }
         } else if self.ai_pending {
-            "AI 思考中..."
+            lang::ui().ai_thinking
         } else {
-            "轮到你 (X)"
+            lang::ui().your_turn
         };
         let tfg = if self.over && !self.draw {
             if self.win {
@@ -339,11 +340,7 @@ impl Game for Gomoku {
         };
         c.put_str(px, py, turn_txt, tfg, col::BLACK);
         py += 3;
-        let help = [
-            "方向键/HJKL 移动",
-            "回车/空格 落子",
-            "ESC/Q 暂停退出",
-        ];
+        let help = lang::ui().gomoku_help;
         for h in help {
             c.put_str(px, py, h, col::GRAY, col::BLACK);
             py += 1;

@@ -4,6 +4,7 @@ use crate::app::Engine;
 use crate::canvas::{col, str_width, Canvas};
 use crate::games::{Game, GameOutcome, Status};
 use crate::input::Action;
+use crate::lang;
 use crate::score::ScoreFile;
 use crossterm::style::Color;
 use rand::Rng;
@@ -148,10 +149,10 @@ impl Plane {
         let (x, y) = self.packs.remove(i);
         if self.lives < MAX_LIVES {
             self.lives += 1;
-            self.hint = Some((0.9, "♥ 生命 +1".to_string()));
+            self.hint = Some((0.9, lang::ui().heal_fmt.to_string()));
             self.explosions.push((x, y, 0.35, col::GREEN));
         } else {
-            self.hint = Some((0.9, "生命已满".to_string()));
+            self.hint = Some((0.9, lang::ui().life_full.to_string()));
         }
     }
 
@@ -396,14 +397,14 @@ impl Game for Plane {
         }
 
         // 面板
-        let title = "飞机大战 PLANE";
-        let score = format!("得分 {}", self.score);
-        let lives = format!("生命 {}", "♥".repeat(self.lives.max(0) as usize));
+        let title = lang::ui().plane_title;
+        let score = lang::fmt(lang::ui().score_fmt, &[&self.score]);
+        let lives = lang::fmt(lang::ui().lives_fmt, &[&"♥".repeat(self.lives.max(0) as usize)]);
         let high = scores
             .get_vec("plane")
             .first()
-            .map(|e| format!("最高 {} ({})", e.score, e.user))
-            .unwrap_or_else(|| "暂无纪录".to_string());
+            .map(|e| lang::fmt(lang::ui().best_fmt, &[&e.score, &e.user]))
+            .unwrap_or_else(|| lang::ui().no_record.to_string());
         let py = oy.saturating_sub(2);
         c.put_str(ox, py, title, col::YELLOW, col::BLACK);
         c.put_str(ox, py + 1, &score, col::GREEN, col::BLACK);
@@ -411,7 +412,7 @@ impl Game for Plane {
         let hx = ox + FW as usize - str_width(&high);
         c.put_str(hx, py, &high, col::GRAY, col::BLACK);
 
-        let help = "方向键/HJKL 移动    按住空格 射击    ♥医疗包+1命    ESC/Q 暂停";
+        let help = lang::ui().plane_help;
         c.put_str(ox, oy + FH as usize + 1, help, col::GRAY, col::BLACK);
     }
 
