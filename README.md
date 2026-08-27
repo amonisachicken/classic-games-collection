@@ -50,9 +50,9 @@ cargo run --release
 | # | 游戏 | 玩法 | 计分 |
 | --- | --- | --- | --- |
 | 1 | 贪吃蛇 | 方向键控制移动，吃食物变长，撞墙/撞自己结束 | 每食物 +10 |
-| 2 | 打砖块 | `←→` 移动挡板，`空格` 发球，打碎全部砖块；3 条命；击碎砖块 1/20 概率掉 `♥` 医疗包，挡板接住回血 | 每砖 +10，通关 +100 |
+| 2 | 打砖块 | `←→` 移动挡板，`空格` 发球，打碎全部砖块；3 条命；击碎砖块 1/20 概率掉 `♥` 医疗包，挡板接住回血（满血时 +20 分） | 每砖 +10，通关 +100 |
 | 3 | 俄罗斯方块 | `←→` 移动，`↑` 旋转，`↓` 加速，`空格` 直落 | 消行 100/300/500/800 × 等级 |
-| 4 | 飞机大战 | 方向键移动，按住 `空格` 射击，3 条命；吃 `♥` 医疗包回血（出现率约为敌机的 1/20） | 普通 10 / 快速 15 / 重型 30 |
+| 4 | 飞机大战 | 方向键移动，按住 `空格` 射击，3 条命；吃 `♥` 医疗包回血（出现率约为敌机的 1/20，满血时 +20 分） | 普通 10 / 快速 15 / 重型 30 |
 | 5 | 五子棋 | 方向键移动光标，`回车/空格` 落子，人机对战 | 统计**胜 / 负次数** |
 
 > 贪吃蛇、打砖块、俄罗斯方块的方块用 2 个半角字符表示（长宽接近正方形），旋转后形状不变形。
@@ -161,9 +161,9 @@ Press `ESC` or `Q` in-game to open the pause menu.
 | # | Game | Gameplay | Scoring |
 | --- | --- | --- | --- |
 | 1 | Snake | Move to eat, grow; walls/self kill | +10 per food |
-| 2 | Breakout | Move paddle, launch, smash bricks; 3 lives; bricks have a 1/20 chance to drop a `♥` health pack — catch it with the paddle to heal | +10/brick, +100 win |
+| 2 | Breakout | Move paddle, launch, smash bricks; 3 lives; bricks have a 1/20 chance to drop a `♥` health pack — catch it with the paddle to heal (+20 pts when full) | +10/brick, +100 win |
 | 3 | Tetris | Move, rotate, soft drop, hard drop | lines × level |
-| 4 | Plane Battle | Move, shoot, 3 lives; grab `♥` to heal (~1/20 of enemies) | normal 10 / fast 15 / heavy 30 |
+| 4 | Plane Battle | Move, shoot, 3 lives; grab `♥` to heal (~1/20 of enemies, +20 pts when full) | normal 10 / fast 15 / heavy 30 |
 | 5 | Gomoku | Move cursor, place stones, play vs AI | tracks **wins / losses** |
 
 > Snake, Breakout and Tetris render each cell as 2 half-width chars for a square aspect ratio, so rotated shapes keep their proportions.

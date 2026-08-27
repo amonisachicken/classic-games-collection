@@ -19,6 +19,8 @@ const BRICK_W: f64 = 3.0;
 const PADDLE_W: f64 = 7.0;
 const PADDLE_Y: f64 = 21.0;
 const MAX_LIVES: i32 = 3;
+/// 满血时吃掉医疗包的得分奖励
+const PACK_SCORE: u32 = 20;
 
 const BRICK_COLORS: [crossterm::style::Color; BRICK_ROWS] = [
     col::RED,
@@ -97,10 +99,13 @@ impl Breakout {
             if pi < self.packs.len() {
                 self.packs.remove(pi);
                 if self.lives < MAX_LIVES {
+                    // 未满血：回一命，不加分
                     self.lives += 1;
                     self.hint = Some((0.9, lang::ui().heal_fmt.to_string()));
                 } else {
-                    self.hint = Some((0.9, lang::ui().life_full.to_string()));
+                    // 满血：不浪费，奖励 20 分
+                    self.score += PACK_SCORE;
+                    self.hint = Some((0.9, lang::ui().pack_score_fmt.to_string()));
                 }
             }
         }
@@ -460,11 +465,15 @@ mod tests {
         assert_eq!(g.lives, 2, "挡板接住医疗包应回一条命");
         assert!(g.packs.is_empty(), "医疗包应被消耗");
         assert!(g.hint.is_some(), "应有拾取提示");
-        // 上限 3 颗心
+        // 未满血时回命不加分
+        assert_eq!(g.score, 0, "回命时不应加分");
+        // 满血: 不加命, 奖励 20 分
+        let score_before = g.score;
         g.lives = 3;
         g.packs.push((g.px + PADDLE_W / 2.0, PADDLE_Y));
         g.update(0.1, &mut eng);
         assert_eq!(g.lives, 3, "生命不能超过 3 颗心");
+        assert_eq!(g.score, score_before + 20, "满血吃掉医疗包应 +20 分");
         assert!(g.packs.is_empty(), "满血时医疗包也应被接住");
     }
 

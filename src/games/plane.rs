@@ -12,6 +12,8 @@ use rand::Rng;
 const FW: f64 = 48.0; // 战场宽
 const FH: f64 = 20.0; // 战场高
 const MAX_LIVES: i32 = 3;
+/// 满血时吃掉医疗包的得分奖励
+const PACK_SCORE: u32 = 20;
 
 #[derive(Clone, Copy)]
 struct Enemy {
@@ -148,11 +150,15 @@ impl Plane {
     fn collect_pack(&mut self, i: usize) {
         let (x, y) = self.packs.remove(i);
         if self.lives < MAX_LIVES {
+            // 未满血：回一命，不加分
             self.lives += 1;
             self.hint = Some((0.9, lang::ui().heal_fmt.to_string()));
             self.explosions.push((x, y, 0.35, col::GREEN));
         } else {
-            self.hint = Some((0.9, lang::ui().life_full.to_string()));
+            // 满血：不浪费，奖励 20 分
+            self.score += PACK_SCORE;
+            self.hint = Some((0.9, lang::ui().pack_score_fmt.to_string()));
+            self.explosions.push((x, y, 0.35, col::YELLOW));
         }
     }
 
@@ -595,11 +601,15 @@ mod tests {
         assert_eq!(g.lives, 2, "吃掉医疗包应恢复一条生命");
         assert!(g.packs.is_empty(), "医疗包应被消耗");
         assert!(g.hint.is_some(), "应有拾取提示");
-        // 上限 3 条
+        // 未满血时回命不加分
+        assert_eq!(g.score, 0, "回命时不应加分");
+        // 满血: 不加命, 奖励 20 分
+        let score_before = g.score;
         g.lives = 3;
         g.packs.push((g.px, g.py));
         g.update(0.05, &mut eng);
         assert_eq!(g.lives, 3, "生命已满不应超过上限");
+        assert_eq!(g.score, score_before + 20, "满血吃掉医疗包应 +20 分");
         assert!(g.packs.is_empty(), "满血时医疗包也应被吃掉");
     }
 
