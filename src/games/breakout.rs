@@ -6,6 +6,7 @@ use crate::games::{Game, GameOutcome, Status};
 use crate::input::Action;
 use crate::lang;
 use crate::score::ScoreFile;
+use rand::Rng;
 
 /// 场地几何（单元 = 1 字符格）。
 /// 左墙 x=0，右墙 x=41；砖块区列 1..=40，行 1..=6。
@@ -44,6 +45,10 @@ pub struct Breakout {
     score: u32,
     ready: bool,
     over: bool,
+    /// 掉落的医疗包 (x, y) 单元格坐标
+    packs: Vec<(f64, f64)>,
+    /// 拾取提示 (剩余时间, 文本)
+    hint: Option<(f64, String)>,
 }
 
 impl Breakout {
@@ -62,8 +67,55 @@ impl Breakout {
             score: 0,
             ready: true,
             over: false,
+            packs: Vec::new(),
+            hint: None,
         }
     }
+
+    /// 医疗包掉落判定：击碎砖块时 1/20 概率。
+    fn roll_pack(&self, rng: &mut impl Rng) -> bool {
+        rng.gen_range(0.0..1.0) < 0.05
+    }
+    /// 医疗包：竖直下落，挡板接住回血，掉出底部消失。
+    fn update_packs(&mut self, dt: f64) {
+        const PACK_SPEED: f64 = 3.5;
+        for pk in self.packs.iter_mut() {
+            pk.1 += PACK_SPEED * dt;
+        }
+        // 挡板接住
+        let mut catch: Vec<usize> = Vec::new();
+        for (pi, &(x, y)) in self.packs.iter().enumerate() {
+            if y >= PADDLE_Y - 0.6
+                && y <= PADDLE_Y + 1.0
+                && x >= self.px - 0.4
+                && x <= self.px + PADDLE_W + 0.4
+            {
+                catch.push(pi);
+            }
+        }
+        for &pi in catch.iter().rev() {
+            if pi < self.packs.len() {
+                self.packs.remove(pi);
+                if self.lives < MAX_LIVES {
+                    self.lives += 1;
+                    self.hint = Some((0.9, lang::ui().heal_fmt.to_string()));
+                } else {
+                    self.hint = Some((0.9, lang::ui().life_full.to_string()));
+                }
+            }
+        }
+        // 掉出底部
+        self.packs.retain(|pk| pk.1 <= FIELD_H as f64 + 1.0);
+        // 提示倒计时
+        if let Some((ttl, _)) = &mut self.hint {
+            *ttl -= dt;
+            if *ttl <= 0.0 {
+                self.hint = None;
+            }
+        }
+    }
+
+
 
     fn brick_cell(&self, row: usize, col: usize) -> (f64, f64, f64, f64) {
         // 返回 (x0, y0, x1, y1) 闭区间
@@ -176,6 +228,11 @@ impl Breakout {
                 self.bricks_left -= 1;
                 self.score += 10;
                 self.speed = (7.5 + self.score as f64 * 0.012).min(12.0);
+                // 医疗包掉落：1/20 概率，从砖块中心落下
+                let mut rng = rand::thread_rng();
+                if self.roll_pack(&mut rng) {
+                    self.packs.push((cx, y0));
+                }
                 if (bx - cx).abs() > (by - cy).abs() {
                     dx = if bx < cx { -dx.abs() } else { dx.abs() };
                     // 推离砖块
@@ -215,6 +272,7 @@ impl Game for Breakout {
         self.time += dt;
         self.move_paddle(dt);
         self.step_ball(dt);
+        self.update_packs(dt);
     }
 
     fn handle(&mut self, a: Action, _eng: &mut Engine) {
@@ -259,6 +317,20 @@ impl Game for Breakout {
         if let Some((bx, by, _, _)) = self.ball {
             c.put(ox + (bx as usize) * 2, oy + by as usize, '●', col::WHITE, col::BLACK);
         }
+        // 医疗包
+        for &(x, y) in &self.packs {
+            c.put(ox + (x as usize) * 2, oy + y as usize, '♥', col::PINK, col::BLACK);
+        }
+        // 拾取提示（显示在挡板上方）
+        if let Some((ttl, text)) = &self.hint {
+            if *ttl > 0.0 {
+                let sx = ox + (self.px as usize) * 2;
+                let sy = (oy + PADDLE_Y as usize).saturating_sub(1);
+                let tx = sx.saturating_sub(str_width(text) / 2);
+                c.put_str(tx, sy, text, col::GREEN, col::BLACK);
+            }
+        }
+
         // 面板
         let title = lang::ui().breakout_title;
         let score = lang::fmt(lang::ui().score_fmt, &[&self.score]);
@@ -355,5 +427,56 @@ mod tests {
             g.update(0.05, &mut eng);
         }
         assert!(g.px > x0 + 3.0, "按住右键应持续右移");
+    }
+
+    #[test]
+    fn pack_drop_rate_is_1_20() {
+        use rand::rngs::StdRng;
+        use rand::SeedableRng;
+        let mut rng = StdRng::seed_from_u64(11);
+        let g = Breakout::new();
+        let n = 10000;
+        let mut packs = 0;
+        for _ in 0..n {
+            if g.roll_pack(&mut rng) {
+                packs += 1;
+            }
+        }
+        // 期望 500 次(1/20), 允许 ±150
+        assert!(
+            (350..=650).contains(&packs),
+            "医疗包掉率应约 1/20, 实际 {packs}/{n}"
+        );
+    }
+
+    #[test]
+    fn paddle_catches_pack_and_heals() {
+        let mut scores = ScoreFile::default();
+        let mut eng = new_engine(&mut scores);
+        let mut g = Breakout::new();
+        g.lives = 1;
+        g.packs.push((g.px + PADDLE_W / 2.0, PADDLE_Y));
+        g.update(0.1, &mut eng);
+        assert_eq!(g.lives, 2, "挡板接住医疗包应回一条命");
+        assert!(g.packs.is_empty(), "医疗包应被消耗");
+        assert!(g.hint.is_some(), "应有拾取提示");
+        // 上限 3 颗心
+        g.lives = 3;
+        g.packs.push((g.px + PADDLE_W / 2.0, PADDLE_Y));
+        g.update(0.1, &mut eng);
+        assert_eq!(g.lives, 3, "生命不能超过 3 颗心");
+        assert!(g.packs.is_empty(), "满血时医疗包也应被接住");
+    }
+
+    #[test]
+    fn pack_falls_past_bottom() {
+        let mut scores = ScoreFile::default();
+        let mut eng = new_engine(&mut scores);
+        let mut g = Breakout::new();
+        g.lives = 2;
+        g.packs.push((10.0, FIELD_H as f64 + 0.5));
+        g.update(0.5, &mut eng);
+        assert!(g.packs.is_empty(), "医疗包应掉出屏幕");
+        assert_eq!(g.lives, 2, "没接住不影响生命");
     }
 }

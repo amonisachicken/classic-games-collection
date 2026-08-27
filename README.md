@@ -49,7 +49,7 @@ Requirements: Rust 1.70+ (run in a real terminal, at least 80×24 recommended).
 | --- | --- | --- | --- |
 | 1 | 贪吃蛇 / Snake | 方向键控制移动，吃食物变长，撞墙/撞自己结束 · Move to eat, grow; walls/self kill | 每食物 +10 · +10 per food |
 | — | — | 贪吃蛇与俄罗斯方块的最小方块用 2 个半角字符表示（长宽接近正方形），旋转后形状不变形 · Snake & Tetris render each cell as 2 half-width chars for a square aspect ratio | — |
-| 2 | 打砖块 / Breakout | `←→` 移动挡板，`空格` 发球，打碎全部砖块；3 条命 · Move paddle, launch, smash bricks; 3 lives | 每砖 +10，通关 +100 · +10/brick, +100 win |
+| 2 | 打砖块 / Breakout | `←→` 移动挡板，`空格` 发球，打碎全部砖块；3 条命；击碎砖块 1/20 概率掉 `♥` 医疗包，挡板接住回血 · Move paddle, launch, smash bricks; 3 lives; bricks have a 1/20 chance to drop a `♥` health pack — catch it with the paddle to heal | 每砖 +10，通关 +100 · +10/brick, +100 win |
 | 3 | 俄罗斯方块 / Tetris | `←→` 移动，`↑` 旋转，`↓` 加速，`空格` 直落 · Move, rotate, soft drop, hard drop | 消行 100/300/500/800 × 等级 · lines × level |
 | 4 | 飞机大战 / Plane Battle | 方向键移动，按住 `空格` 射击，3 条命；吃 `♥` 医疗包回血（出现率约为敌机的 1/20）· Move, shoot, 3 lives; grab `♥` to heal (~1/20 of enemies) | 普通 10 / 快速 15 / 重型 30 · normal 10 / fast 15 / heavy 30 |
 | 5 | 五子棋 / Gomoku | 方向键移动光标，`回车/空格` 落子，人机对战 · Move cursor, place stones, play vs AI | 统计**胜 / 负次数** · tracks **wins / losses** |
