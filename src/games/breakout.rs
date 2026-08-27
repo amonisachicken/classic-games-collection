@@ -71,10 +71,8 @@ impl Breakout {
     }
 
     fn brick_at(&self, bx: f64, by: f64) -> Option<(usize, usize)> {
-        if !(1.0..=40.0).contains(&bx) || !(1.0..=6.0).contains(&by) {
-            return None;
-        }
-        // 砖块列: x0 = 1 + c*4 → c = (x-1)/4 向下取整
+        // 砖块列: x0 = 1 + c*4 → c = (x-1)/4 向下取整；行: r = (y-1) 向下取整。
+        // 注意最底行砖块位于 y∈[6,7)，这里不做 y 上限预判，交给下方边界检查。
         let c = ((bx - 1.0) / 4.0).floor() as i64;
         let r = (by - 1.0).floor() as i64;
         if r >= 0 && r < BRICK_ROWS as i64 && c >= 0 && c < BRICK_COLS as i64 {
@@ -320,6 +318,27 @@ mod tests {
         let x1 = g.px;
         g.update(0.3, &mut eng);
         assert_eq!(g.px, x1, "窗口过期后挡板不应继续漂移");
+    }
+
+    #[test]
+    fn bottom_row_bricks_are_destroyable() {
+        let mut scores = ScoreFile::default();
+        let mut eng = new_engine(&mut scores);
+        let mut g = Breakout::new();
+        // 清空所有砖块，只留最底行中间一块
+        for r in 0..BRICK_ROWS {
+            for c in 0..BRICK_COLS {
+                g.bricks[r][c] = false;
+            }
+        }
+        g.bricks[BRICK_ROWS - 1][4] = true;
+        g.bricks_left = 1;
+        // 球位于底行砖块内部（y=6.5，处于 6..7 区间）
+        g.ball = Some((20.0, 6.5, 0.0, 1.0));
+        g.ready = false;
+        g.update(0.05, &mut eng);
+        assert_eq!(g.bricks_left, 0, "底行砖块应能被击碎");
+        assert!(g.over, "击碎最后一块砖后游戏应结束");
     }
 
     #[test]
