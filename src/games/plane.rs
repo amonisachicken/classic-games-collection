@@ -188,50 +188,39 @@ impl Game for Plane {
         }
         self.ebullets.retain(|b| b.1 <= FH + 1.0);
 
-        // 子弹 vs 敌机
-        let mut hit: Vec<usize> = Vec::new();
+        // 子弹 vs 敌机：一发子弹命中一架敌机，立即结算伤害
+        let mut hit_bullets: Vec<usize> = Vec::new();
         for (bi, &(bx, by)) in self.bullets.iter().enumerate() {
-            for e in self.enemies.iter() {
+            let mut ei = 0;
+            while ei < self.enemies.len() {
+                let e = self.enemies[ei];
                 if (bx - e.x).abs() < 1.0 && (by - e.y).abs() < 1.0 {
-                    hit.push(bi);
+                    hit_bullets.push(bi);
+                    self.enemies[ei].hp -= 1;
+                    if self.enemies[ei].hp <= 0 {
+                        let pts = match e.kind {
+                            0 => 10,
+                            1 => 15,
+                            _ => 30,
+                        };
+                        self.score += pts;
+                        self.explosions.push((e.x, e.y, 0.35));
+                        self.enemies.remove(ei);
+                    }
                     break;
                 }
+                ei += 1;
             }
         }
-        // 从后往前移除命中的子弹，并结算敌机
-        let mut removed_bullets: Vec<usize> = hit;
-        removed_bullets.sort_unstable();
-        removed_bullets.dedup();
-        for &bi in removed_bullets.iter().rev() {
-            if bi < self.bullets.len() {
-                self.bullets.remove(bi);
-            }
-        }
-        let mut i = 0;
-        while i < self.enemies.len() {
-            let e = self.enemies[i];
-            let mut was_hit = false;
-            for &(bx, by) in &self.bullets {
-                if (bx - e.x).abs() < 1.0 && (by - e.y).abs() < 1.0 {
-                    was_hit = true;
-                    break;
+        // 移除已命中的子弹
+        if !hit_bullets.is_empty() {
+            hit_bullets.sort_unstable();
+            hit_bullets.dedup();
+            for &bi in hit_bullets.iter().rev() {
+                if bi < self.bullets.len() {
+                    self.bullets.remove(bi);
                 }
             }
-            if was_hit {
-                self.enemies[i].hp -= 1;
-                if self.enemies[i].hp <= 0 {
-                    let pts = match e.kind {
-                        0 => 10,
-                        1 => 15,
-                        _ => 30,
-                    };
-                    self.score += pts;
-                    self.explode(e.x, e.y);
-                    self.enemies.remove(i);
-                    continue;
-                }
-            }
-            i += 1;
         }
 
         // 敌机 vs 玩家
@@ -455,5 +444,47 @@ mod tests {
         g.invuln = 0.0;
         g.update(0.05, &mut eng);
         assert_eq!(g.lives, 1, "与敌机相撞应扣命");
+    }
+
+    #[test]
+    fn bullets_damage_and_kill_enemies() {
+        let mut scores = ScoreFile::default();
+        let mut eng = new_engine(&mut scores);
+        let mut g = Plane::new();
+        g.spawn_acc = 0.0;
+        // 普通敌机 hp=1：一颗子弹击落
+        g.enemies.push(Enemy {
+            x: 20.0,
+            y: 3.0,
+            hp: 1,
+            kind: 0,
+            speed: 0.0,
+            shoot_acc: 0.0,
+        });
+        g.bullets.push((20.0, 4.0)); // 子弹从敌机下方飞入
+        g.update(0.01, &mut eng);
+        assert!(g.enemies.is_empty(), "普通敌机应被一颗子弹击落");
+        assert_eq!(g.score, 10, "击落普通敌机得分 10");
+        assert!(g.bullets.is_empty(), "命中的子弹应被消耗");
+
+        // 重型敌机 hp=3：需要三颗子弹
+        g.enemies.push(Enemy {
+            x: 30.0,
+            y: 3.0,
+            hp: 3,
+            kind: 2,
+            speed: 0.0,
+            shoot_acc: 0.0,
+        });
+        g.bullets.push((30.0, 4.0));
+        g.update(0.01, &mut eng);
+        assert_eq!(g.enemies.len(), 1, "第一发后重型敌机仍在");
+        assert_eq!(g.enemies[0].hp, 2, "重型敌机中一弹后剩 2 血");
+        g.bullets.push((30.0, 4.0));
+        g.update(0.01, &mut eng);
+        g.bullets.push((30.0, 4.0));
+        g.update(0.01, &mut eng);
+        assert!(g.enemies.is_empty(), "三颗子弹应击落重型敌机");
+        assert_eq!(g.score, 40, "累计得分 10+30");
     }
 }
