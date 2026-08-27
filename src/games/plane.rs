@@ -5,6 +5,7 @@ use crate::canvas::{col, str_width, Canvas};
 use crate::games::{Game, GameOutcome, Status};
 use crate::input::Action;
 use crate::score::ScoreFile;
+use crossterm::style::Color;
 use rand::Rng;
 
 const FW: f64 = 48.0; // 战场宽
@@ -33,7 +34,12 @@ pub struct Plane {
     bullets: Vec<(f64, f64)>,
     ebullets: Vec<(f64, f64)>,
     enemies: Vec<Enemy>,
-    explosions: Vec<(f64, f64, f64)>,
+    /// 医疗包 (x, y)
+    packs: Vec<(f64, f64)>,
+    /// 爆炸特效 (x, y, 剩余时间, 颜色)
+    explosions: Vec<(f64, f64, f64, Color)>,
+    /// 屏幕提示 (剩余时间, 文本)
+    hint: Option<(f64, String)>,
     shoot_acc: f64,
     spawn_acc: f64,
     lives: i32,
@@ -56,7 +62,9 @@ impl Plane {
             bullets: Vec::new(),
             ebullets: Vec::new(),
             enemies: Vec::new(),
+            packs: Vec::new(),
             explosions: Vec::new(),
+            hint: None,
             shoot_acc: 0.0,
             spawn_acc: 1.0,
             lives: MAX_LIVES,
@@ -122,7 +130,29 @@ impl Plane {
     }
 
     fn explode(&mut self, x: f64, y: f64) {
-        self.explosions.push((x, y, 0.35));
+        self.explosions.push((x, y, 0.35, col::ORANGE));
+    }
+
+    /// 医疗包掉落判定：概率为敌机的 1/20。
+    fn roll_pack(&self, rng: &mut impl Rng) -> bool {
+        rng.gen_range(0.0..1.0) < 0.05
+    }
+
+    fn spawn_pack(&mut self, rng: &mut impl Rng) {
+        let x = rng.gen_range(1.0..FW - 1.0);
+        self.packs.push((x, 1.0));
+    }
+
+    /// 拾取医疗包：恢复一条生命（上限 MAX_LIVES）。
+    fn collect_pack(&mut self, i: usize) {
+        let (x, y) = self.packs.remove(i);
+        if self.lives < MAX_LIVES {
+            self.lives += 1;
+            self.hint = Some((0.9, "♥ 生命 +1".to_string()));
+            self.explosions.push((x, y, 0.35, col::GREEN));
+        } else {
+            self.hint = Some((0.9, "生命已满".to_string()));
+        }
     }
 
     fn hit_player(&mut self) -> bool {
@@ -170,6 +200,36 @@ impl Game for Plane {
         if self.spawn_acc >= interval {
             self.spawn_acc = 0.0;
             self.spawn_enemy();
+            // 医疗包伴随出现：概率为敌机的 1/20
+            let mut rng = rand::thread_rng();
+            if self.roll_pack(&mut rng) {
+                self.spawn_pack(&mut rng);
+            }
+        }
+        // 医疗包向下飞行（迎面而来）
+        const PACK_SPEED: f64 = 4.0;
+        for pk in self.packs.iter_mut() {
+            pk.1 += PACK_SPEED * dt;
+        }
+        self.packs.retain(|pk| pk.1 <= FH + 1.0);
+        // 拾取医疗包
+        let mut collect: Vec<usize> = Vec::new();
+        for (pi, &(x, y)) in self.packs.iter().enumerate() {
+            if (x - self.px).abs() < 0.9 && (y - self.py).abs() < 0.9 {
+                collect.push(pi);
+            }
+        }
+        for &pi in collect.iter().rev() {
+            if pi < self.packs.len() {
+                self.collect_pack(pi);
+            }
+        }
+        // 提示文字倒计时
+        if let Some((ttl, _)) = &mut self.hint {
+            *ttl -= dt;
+            if *ttl <= 0.0 {
+                self.hint = None;
+            }
         }
         // 敌机移动/射击
         for e in self.enemies.iter_mut() {
@@ -204,7 +264,7 @@ impl Game for Plane {
                             _ => 30,
                         };
                         self.score += pts;
-                        self.explosions.push((e.x, e.y, 0.35));
+                        self.explosions.push((e.x, e.y, 0.35, col::ORANGE));
                         self.enemies.remove(ei);
                     }
                     break;
@@ -317,9 +377,22 @@ impl Game for Plane {
             c.put(ox + e.x as usize, oy + e.y as usize, ch, fg, col::BLACK);
         }
         // 爆炸
-        for &(x, y, ttl) in &self.explosions {
+        for &(x, y, ttl, color) in &self.explosions {
             let ch = if ttl > 0.2 { '*' } else { '+' };
-            c.put(ox + x as usize, oy + y as usize, ch, col::ORANGE, col::BLACK);
+            c.put(ox + x as usize, oy + y as usize, ch, color, col::BLACK);
+        }
+        // 医疗包
+        for &(x, y) in &self.packs {
+            c.put(ox + x as usize, oy + y as usize, '♥', col::PINK, col::BLACK);
+        }
+        // 拾取提示（显示在玩家上方）
+        if let Some((ttl, text)) = &self.hint {
+            if *ttl > 0.0 {
+                let sx = ox + self.px as usize;
+                let sy = (oy + self.py as usize).saturating_sub(1);
+                let tx = sx.saturating_sub(str_width(text) / 2);
+                c.put_str(tx, sy, text, col::GREEN, col::BLACK);
+            }
         }
 
         // 面板
@@ -338,7 +411,7 @@ impl Game for Plane {
         let hx = ox + FW as usize - str_width(&high);
         c.put_str(hx, py, &high, col::GRAY, col::BLACK);
 
-        let help = "方向键/HJKL 移动    按住空格 射击    ESC/Q 暂停";
+        let help = "方向键/HJKL 移动    按住空格 射击    ♥医疗包+1命    ESC/Q 暂停";
         c.put_str(ox, oy + FH as usize + 1, help, col::GRAY, col::BLACK);
     }
 
@@ -486,5 +559,59 @@ mod tests {
         g.update(0.01, &mut eng);
         assert!(g.enemies.is_empty(), "三颗子弹应击落重型敌机");
         assert_eq!(g.score, 40, "累计得分 10+30");
+    }
+
+    #[test]
+    fn pack_spawn_rate_is_1_20() {
+        use rand::rngs::StdRng;
+        use rand::SeedableRng;
+        let mut rng = StdRng::seed_from_u64(7);
+        let g = Plane::new();
+        let n = 10000;
+        let mut packs = 0;
+        for _ in 0..n {
+            if g.roll_pack(&mut rng) {
+                packs += 1;
+            }
+        }
+        // 期望 500 次（1/20），允许 ±150
+        assert!(
+            (350..=650).contains(&packs),
+            "医疗包概率应约 1/20, 实际 {packs}/{n}"
+        );
+    }
+
+    #[test]
+    fn pack_collect_heals() {
+        let mut scores = ScoreFile::default();
+        let mut eng = new_engine(&mut scores);
+        let mut g = Plane::new();
+        g.lives = 1;
+        g.spawn_acc = 0.0;
+        // 医疗包与玩家重合
+        g.packs.push((g.px, g.py));
+        g.update(0.05, &mut eng);
+        assert_eq!(g.lives, 2, "吃掉医疗包应恢复一条生命");
+        assert!(g.packs.is_empty(), "医疗包应被消耗");
+        assert!(g.hint.is_some(), "应有拾取提示");
+        // 上限 3 条
+        g.lives = 3;
+        g.packs.push((g.px, g.py));
+        g.update(0.05, &mut eng);
+        assert_eq!(g.lives, 3, "生命已满不应超过上限");
+        assert!(g.packs.is_empty(), "满血时医疗包也应被吃掉");
+    }
+
+    #[test]
+    fn pack_flies_off_bottom() {
+        let mut scores = ScoreFile::default();
+        let mut eng = new_engine(&mut scores);
+        let mut g = Plane::new();
+        g.lives = 2;
+        g.spawn_acc = 0.0;
+        g.packs.push((5.0, FH - 0.5));
+        g.update(1.0, &mut eng); // 医疗包飞出底部
+        assert!(g.packs.is_empty(), "医疗包应飞出屏幕");
+        assert_eq!(g.lives, 2, "医疗包离场不影响生命");
     }
 }

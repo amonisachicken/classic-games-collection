@@ -22,6 +22,7 @@ pub mod col {
     pub const DARK_BLUE: Color = Color::AnsiValue(24);
     pub const MAGENTA: Color = Color::AnsiValue(129);
     pub const PURPLE: Color = Color::AnsiValue(135);
+    pub const PINK: Color = Color::AnsiValue(213);
     pub const CYAN: Color = Color::AnsiValue(51);
 }
 
