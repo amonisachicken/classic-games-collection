@@ -460,3 +460,21 @@ fn draw_username(eng: &mut Engine, buf: &str, msg: &str) {
         c.put_str(x + 2, y + 6, msg, col::RED, col::DARK_BLUE);
     }
 }
+
+// ---------------- 测试辅助 ----------------
+
+#[cfg(test)]
+impl<'a> Engine<'a> {
+    /// 测试用引擎（不需要真实终端）。
+    pub fn test_engine(scores: &'a mut ScoreFile) -> Self {
+        Engine {
+            canvas: Canvas::new(80, 24),
+            scores,
+            user: "tester".to_string(),
+            term_w: 80,
+            term_h: 24,
+            quit_requested: false,
+            acc: 0.0,
+        }
+    }
+}

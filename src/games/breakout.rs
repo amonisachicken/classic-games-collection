@@ -30,8 +30,11 @@ pub struct Breakout {
     bricks: Vec<Vec<bool>>, // [row][col]
     bricks_left: usize,
     px: f64, // 挡板左端 x
-    left_held: bool,
-    right_held: bool,
+    /// 最后一次收到左/右键事件的时间（用于窗口期判定按住状态）
+    left_since: f64,
+    right_since: f64,
+    /// 游戏内部时钟
+    time: f64,
     /// None = 待发球（球在挡板上）
     ball: Option<(f64, f64, f64, f64)>, // x, y, dx, dy
     speed: f64,
@@ -48,8 +51,9 @@ impl Breakout {
             bricks_left: BRICK_COLS * BRICK_ROWS,
             bricks,
             px: (FIELD_W as f64 - PADDLE_W) / 2.0,
-            left_held: false,
-            right_held: false,
+            left_since: -1000.0,
+            right_since: -1000.0,
+            time: 0.0,
             ball: None,
             speed: 7.5,
             lives: MAX_LIVES,
@@ -98,7 +102,12 @@ impl Breakout {
     }
 
     fn move_paddle(&mut self, dt: f64) {
-        let dir = (self.right_held as i32 - self.left_held as i32) as f64;
+        // 按键窗口期（秒）：按住时终端的按键重复事件会持续刷新窗口；
+        // 松开后（部分终端不发送释放事件）窗口过期自动停止。
+        const HOLD_WINDOW: f64 = 0.15;
+        let left = self.time - self.left_since < HOLD_WINDOW;
+        let right = self.time - self.right_since < HOLD_WINDOW;
+        let dir = (right as i32 - left as i32) as f64;
         if dir == 0.0 {
             return;
         }
@@ -203,6 +212,7 @@ impl Game for Breakout {
         if self.over {
             return;
         }
+        self.time += dt;
         self.move_paddle(dt);
         self.step_ball(dt);
     }
@@ -212,10 +222,8 @@ impl Game for Breakout {
             return;
         }
         match a {
-            Action::Left => self.left_held = true,
-            Action::Right => self.right_held = true,
-            Action::ReleaseLeft => self.left_held = false,
-            Action::ReleaseRight => self.right_held = false,
+            Action::Left => self.left_since = self.time,
+            Action::Right => self.right_since = self.time,
             Action::Space | Action::Confirm => {
                 if self.ready {
                     self.launch();
@@ -285,5 +293,46 @@ impl Game for Breakout {
 
     fn outcome(&self) -> GameOutcome {
         GameOutcome::Score(self.score)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::Engine;
+    use crate::score::ScoreFile;
+
+    fn new_engine(scores: &mut ScoreFile) -> Engine<'_> {
+        Engine::test_engine(scores)
+    }
+
+    #[test]
+    fn paddle_stops_after_tap() {
+        let mut scores = ScoreFile::default();
+        let mut eng = new_engine(&mut scores);
+        let mut g = Breakout::new();
+        let x0 = g.px;
+        // 点按一次左键：挡板短暂移动
+        g.handle(Action::Left, &mut eng);
+        g.update(0.05, &mut eng);
+        assert!(g.px < x0, "点按左键应使挡板左移");
+        // 窗口过期后（无释放事件）挡板必须停下
+        let x1 = g.px;
+        g.update(0.3, &mut eng);
+        assert_eq!(g.px, x1, "窗口过期后挡板不应继续漂移");
+    }
+
+    #[test]
+    fn paddle_moves_while_held() {
+        let mut scores = ScoreFile::default();
+        let mut eng = new_engine(&mut scores);
+        let mut g = Breakout::new();
+        let x0 = g.px;
+        // 模拟按住：持续收到按键事件刷新窗口
+        for _ in 0..10 {
+            g.handle(Action::Right, &mut eng);
+            g.update(0.05, &mut eng);
+        }
+        assert!(g.px > x0 + 3.0, "按住右键应持续右移");
     }
 }

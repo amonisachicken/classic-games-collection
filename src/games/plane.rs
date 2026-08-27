@@ -24,15 +24,16 @@ struct Enemy {
 pub struct Plane {
     px: f64,
     py: f64,
-    left_held: bool,
-    right_held: bool,
-    up_held: bool,
-    down_held: bool,
+    /// 各方向最后一次按键事件的时间（窗口期判定按住）
+    left_since: f64,
+    right_since: f64,
+    up_since: f64,
+    down_since: f64,
+    space_since: f64,
     bullets: Vec<(f64, f64)>,
     ebullets: Vec<(f64, f64)>,
     enemies: Vec<Enemy>,
     explosions: Vec<(f64, f64, f64)>,
-    shooting: bool,
     shoot_acc: f64,
     spawn_acc: f64,
     lives: i32,
@@ -47,15 +48,15 @@ impl Plane {
         Plane {
             px: FW / 2.0,
             py: FH - 2.0,
-            left_held: false,
-            right_held: false,
-            up_held: false,
-            down_held: false,
+            left_since: -1000.0,
+            right_since: -1000.0,
+            up_since: -1000.0,
+            down_since: -1000.0,
+            space_since: -1000.0,
             bullets: Vec::new(),
             ebullets: Vec::new(),
             enemies: Vec::new(),
             explosions: Vec::new(),
-            shooting: false,
             shoot_acc: 0.0,
             spawn_acc: 1.0,
             lives: MAX_LIVES,
@@ -67,8 +68,22 @@ impl Plane {
     }
 
     fn move_player(&mut self, dt: f64) {
-        let mut dx = (self.right_held as i32 - self.left_held as i32) as f64;
-        let mut dy = (self.down_held as i32 - self.up_held as i32) as f64;
+        // 按键窗口期：按住时终端重复事件持续刷新；松开后窗口过期自动停止。
+        const HOLD_WINDOW: f64 = 0.15;
+        let mut dx = 0.0f64;
+        let mut dy = 0.0f64;
+        if self.time - self.right_since < HOLD_WINDOW {
+            dx += 1.0;
+        }
+        if self.time - self.left_since < HOLD_WINDOW {
+            dx -= 1.0;
+        }
+        if self.time - self.down_since < HOLD_WINDOW {
+            dy += 1.0;
+        }
+        if self.time - self.up_since < HOLD_WINDOW {
+            dy -= 1.0;
+        }
         if dx != 0.0 && dy != 0.0 {
             let inv = std::f64::consts::FRAC_1_SQRT_2;
             dx *= inv;
@@ -134,8 +149,9 @@ impl Game for Plane {
         }
         self.move_player(dt);
 
-        // 玩家射击
-        if self.shooting {
+        // 玩家射击：空格按下后窗口期内持续开火，松开（无释放事件）后自动停止
+        const SHOOT_WINDOW: f64 = 0.18;
+        if self.time - self.space_since < SHOOT_WINDOW {
             self.shoot_acc += dt;
             if self.shoot_acc >= 0.16 {
                 self.shoot_acc = 0.0;
@@ -288,16 +304,17 @@ impl Game for Plane {
             return;
         }
         match a {
-            Action::Left => self.left_held = true,
-            Action::Right => self.right_held = true,
-            Action::Up => self.up_held = true,
-            Action::Down => self.down_held = true,
-            Action::ReleaseLeft => self.left_held = false,
-            Action::ReleaseRight => self.right_held = false,
-            Action::ReleaseUp => self.up_held = false,
-            Action::ReleaseDown => self.down_held = false,
-            Action::Space => self.shooting = true,
-            Action::ReleaseSpace => self.shooting = false,
+            Action::Left => self.left_since = self.time,
+            Action::Right => self.right_since = self.time,
+            Action::Up => self.up_since = self.time,
+            Action::Down => self.down_since = self.time,
+            Action::Space => {
+                // 新一次按压（距上次按压足够久）预充能，保证立即开火
+                if self.time - self.space_since > 0.3 {
+                    self.shoot_acc = 0.16;
+                }
+                self.space_since = self.time;
+            }
             _ => {}
         }
     }
@@ -366,5 +383,50 @@ impl Game for Plane {
 
     fn outcome(&self) -> GameOutcome {
         GameOutcome::Score(self.score)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::Engine;
+    use crate::score::ScoreFile;
+
+    fn new_engine(scores: &mut ScoreFile) -> Engine<'_> {
+        Engine::test_engine(scores)
+    }
+
+    #[test]
+    fn plane_stops_after_tap() {
+        let mut scores = ScoreFile::default();
+        let mut eng = new_engine(&mut scores);
+        let mut g = Plane::new();
+        let y0 = g.py;
+        g.handle(Action::Up, &mut eng);
+        g.update(0.05, &mut eng);
+        assert!(g.py < y0, "点按上键应使飞机上移");
+        let y1 = g.py;
+        g.update(0.3, &mut eng);
+        assert_eq!(g.py, y1, "窗口过期后飞机不应继续漂移");
+    }
+
+    #[test]
+    fn shooting_works_per_tap() {
+        let mut scores = ScoreFile::default();
+        let mut eng = new_engine(&mut scores);
+        let mut g = Plane::new();
+        let n0 = g.bullets.len();
+        // 点按空格：预充能，立即开火一发
+        g.handle(Action::Space, &mut eng);
+        g.update(0.05, &mut eng);
+        assert_eq!(g.bullets.len(), n0 + 1, "点按空格应立即开火一发");
+        // 松开（无释放事件）：窗口过期后不再追加子弹
+        g.update(0.5, &mut eng);
+        let n1 = g.bullets.len();
+        assert!(n1 <= n0 + 1, "松手后不应继续开火");
+        // 再次点按又能开火
+        g.handle(Action::Space, &mut eng);
+        g.update(0.05, &mut eng);
+        assert!(g.bullets.len() > n1, "再次点按应能开火");
     }
 }

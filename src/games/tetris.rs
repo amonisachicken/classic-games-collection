@@ -95,7 +95,9 @@ pub struct Tetris {
     lines: u32,
     level: u32,
     drop_acc: f64,
-    soft: bool,
+    /// 最后一次按 ↓ 的时间（窗口期判定软降）
+    soft_since: f64,
+    time: f64,
     over: bool,
 }
 
@@ -110,7 +112,8 @@ impl Tetris {
             lines: 0,
             level: 1,
             drop_acc: 0.0,
-            soft: false,
+            soft_since: -1000.0,
+            time: 0.0,
             over: false,
         };
         t.next_kind = t.random_kind();
@@ -245,6 +248,16 @@ impl Tetris {
     fn drop_interval(&self) -> f64 {
         (0.8 * 0.8f64.powf(self.level as f64 - 1.0)).max(0.05)
     }
+
+    /// 软降倍率：按下 ↓ 后的窗口期内加速，窗口过期自动恢复。
+    fn soft_mult(&self) -> f64 {
+        const SOFT_WINDOW: f64 = 0.12;
+        if self.time - self.soft_since < SOFT_WINDOW {
+            18.0
+        } else {
+            1.0
+        }
+    }
 }
 
 impl Game for Tetris {
@@ -252,8 +265,8 @@ impl Game for Tetris {
         if self.over {
             return;
         }
-        let mult = if self.soft { 18.0 } else { 1.0 };
-        self.drop_acc += dt * mult;
+        self.time += dt;
+        self.drop_acc += dt * self.soft_mult();
         let interval = self.drop_interval();
         while self.drop_acc >= interval {
             self.drop_acc -= interval;
@@ -280,8 +293,7 @@ impl Game for Tetris {
                 self.try_move(1, 0);
             }
             Action::Up => self.rotate(),
-            Action::Down => self.soft = true,
-            Action::ReleaseDown => self.soft = false,
+            Action::Down => self.soft_since = self.time,
             Action::Space | Action::Confirm => self.hard_drop(),
             _ => {}
         }
@@ -380,5 +392,28 @@ impl Game for Tetris {
 
     fn outcome(&self) -> GameOutcome {
         GameOutcome::Score(self.score)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::Engine;
+    use crate::input::Action;
+    use crate::score::ScoreFile;
+
+    #[test]
+    fn soft_drop_window_expires() {
+        let mut scores = ScoreFile::default();
+        let mut eng = Engine::test_engine(&mut scores);
+        let mut t = Tetris::new();
+        assert_eq!(t.soft_mult(), 1.0, "初始不应软降");
+        t.handle(Action::Down, &mut eng);
+        assert_eq!(t.soft_mult(), 18.0, "按 ↓ 应加速");
+        let y0 = t.cur.y;
+        t.update(0.05, &mut eng);
+        assert!(t.cur.y > y0, "软降期间方块应更快下落");
+        t.update(0.15, &mut eng); // 超过 0.12s 窗口
+        assert_eq!(t.soft_mult(), 1.0, "窗口过期应恢复普通速度");
     }
 }
