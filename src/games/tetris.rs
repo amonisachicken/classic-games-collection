@@ -302,20 +302,20 @@ impl Game for Tetris {
 
     fn draw(&self, c: &mut Canvas, scores: &ScoreFile, _user: &str) {
         c.fill_rect(0, 0, c.w, c.h, ' ', col::BLACK, col::BLACK);
-        // 布局：井 + 右侧面板
+        // 布局：井 + 右侧面板（每个游戏格占 2 列方块像素，使长宽接近正方形）
         let panel_w = 18usize;
-        let ox = c.w.saturating_sub(W + 2 + panel_w) / 2;
+        let ox = c.w.saturating_sub(W * 2 + 2 + panel_w) / 2;
         let oy = c.h.saturating_sub(H + 2) / 2;
         let bx = ox + 1;
         let by = oy + 1;
 
         // 井边框
-        c.border(ox, oy, W + 2, H + 2, col::CYAN);
+        c.border(ox, oy, W * 2 + 2, H + 2, col::CYAN);
         // 已落方块
         for (r, row) in self.board.iter().enumerate() {
             for (col, cell) in row.iter().enumerate() {
                 if let Some(k) = cell {
-                    c.put(bx + col, by + r, '█', PIECE_COLORS[*k as usize], col::BLACK);
+                    c.put_block(bx + col * 2, by + r, PIECE_COLORS[*k as usize], col::BLACK);
                 }
             }
         }
@@ -324,10 +324,9 @@ impl Game for Tetris {
             let cx = self.cur.x + dx;
             let cy = self.cur.y + dy;
             if cx >= 0 && cx < W as i32 && cy >= 0 && cy < H as i32 {
-                c.put(
-                    bx + cx as usize,
+                c.put_block(
+                    bx + cx as usize * 2,
                     by + cy as usize,
-                    '█',
                     PIECE_COLORS[self.cur.kind as usize],
                     col::BLACK,
                 );
@@ -335,7 +334,7 @@ impl Game for Tetris {
         }
 
         // 面板
-        let px = ox + W + 2 + 2;
+        let px = ox + W * 2 + 2 + 2;
         let mut py = oy;
         c.put_str(px, py, lang::ui().tetris_title, col::YELLOW, col::BLACK);
         py += 1;
@@ -361,10 +360,9 @@ impl Game for Tetris {
         let minx = cells.iter().map(|c| c.0).min().unwrap();
         let miny = cells.iter().map(|c| c.1).min().unwrap();
         for (dx, dy) in cells {
-            c.put(
-                px + (dx - minx) as usize,
+            c.put_block(
+                px + (dx - minx) as usize * 2,
                 py + (dy - miny) as usize,
-                '█',
                 PIECE_COLORS[self.next_kind as usize],
                 col::BLACK,
             );

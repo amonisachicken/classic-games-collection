@@ -116,6 +116,13 @@ impl Canvas {
         }
     }
 
+    /// 画一个“方块像素”：2 个半角字符并排，使长宽接近正方形
+    /// （终端字符格高约等于宽的两倍，2 格宽 ≈ 1 格高）。
+    pub fn put_block(&mut self, x: usize, y: usize, fg: Color, bg: Color) {
+        self.put(x, y, '█', fg, bg);
+        self.put(x + 1, y, '█', fg, bg);
+    }
+
     /// 画一个由字符组成的实心矩形。
     pub fn fill_rect(&mut self, x: usize, y: usize, w: usize, h: usize, ch: char, fg: Color, bg: Color) {
         for yy in y..(y + h).min(self.h) {

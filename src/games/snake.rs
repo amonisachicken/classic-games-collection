@@ -111,14 +111,14 @@ impl Snake {
     }
 
     fn draw_board(&self, c: &mut Canvas, ox: usize, oy: usize) {
-        // 边框
-        c.border(ox, oy, BW + 2, BH + 2, col::CYAN);
+        // 每个游戏格占 2 列（方块像素），使长宽接近正方形
+        c.border(ox, oy, BW * 2 + 2, BH + 2, col::CYAN);
         // 食物
-        c.put(ox + 1 + self.food.0, oy + 1 + self.food.1, '●', col::RED, col::BLACK);
+        c.put_block(ox + 1 + self.food.0 * 2, oy + 1 + self.food.1, col::RED, col::BLACK);
         // 蛇身
         for (i, &(x, y)) in self.body.iter().enumerate() {
             let fg = if i == 0 { col::YELLOW } else { col::GREEN };
-            c.put(ox + 1 + x, oy + 1 + y, '█', fg, col::BLACK);
+            c.put_block(ox + 1 + x * 2, oy + 1 + y, fg, col::BLACK);
         }
     }
 }
@@ -154,7 +154,7 @@ impl Game for Snake {
 
     fn draw(&self, c: &mut Canvas, scores: &ScoreFile, _user: &str) {
         c.fill_rect(0, 0, c.w, c.h, ' ', col::BLACK, col::BLACK);
-        let ox = c.w.saturating_sub(BW + 2) / 2;
+        let ox = c.w.saturating_sub(BW * 2 + 2) / 2;
         let oy = c.h.saturating_sub(BH + 2) / 2;
         self.draw_board(c, ox, oy);
 
@@ -169,7 +169,7 @@ impl Game for Snake {
         let py = oy.saturating_sub(2);
         c.put_str(ox, py, title, col::YELLOW, col::BLACK);
         c.put_str(ox, py + 1, &score, col::GREEN, col::BLACK);
-        let hx = ox + BW + 2 - str_width(&high);
+        let hx = ox + BW * 2 + 2 - str_width(&high);
         c.put_str(hx, py, &high, col::GRAY, col::BLACK);
 
         // 底部提示
@@ -178,7 +178,7 @@ impl Game for Snake {
 
         if self.paused {
             let t = lang::ui().snake_paused;
-            let px = ox + (BW + 2 - str_width(t)) / 2;
+            let px = ox + (BW * 2 + 2 - str_width(t)) / 2;
             let py2 = oy + BH / 2;
             c.put_str(px, py2, t, col::YELLOW, col::BLACK);
         }
