@@ -4,13 +4,13 @@
 
 **选择语言 / Choose language：**
 
-[🇨🇳 中文](#zh) ｜ [🇺🇸 English](#en)
+[中文](#zh) ｜ [English](#en)
 
 ---
 
 <a id="zh"></a>
 
-# 🇨🇳 中文
+# 中文
 
 一个用 Rust 编写的终端经典游戏合集 CLI 应用，包含 **贪吃蛇 / 打砖块 / 俄罗斯方块 / 飞机大战 / 五子棋** 五款游戏。
 
@@ -121,7 +121,7 @@ cargo test
 
 <a id="en"></a>
 
-# 🇺🇸 English
+# English
 
 A terminal classic-game collection CLI written in Rust, featuring **Snake / Breakout / Tetris / Plane Battle / Gomoku** — five games in one.
 
