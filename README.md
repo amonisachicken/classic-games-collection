@@ -4,7 +4,7 @@
 
 **选择语言 / Choose language：**
 
-[🇨🇳 中文](#zh) ｜ [🇬🇧 English](#en)
+[🇨🇳 中文](#zh) ｜ [🇺🇸 English](#en)
 
 ---
 
@@ -121,7 +121,7 @@ cargo test
 
 <a id="en"></a>
 
-# 🇬🇧 English
+# 🇺🇸 English
 
 A terminal classic-game collection CLI written in Rust, featuring **Snake / Breakout / Tetris / Plane Battle / Gomoku** — five games in one.
 
