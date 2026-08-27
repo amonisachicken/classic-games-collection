@@ -155,7 +155,12 @@ impl Canvas {
             let mut x = 0usize;
             while x < self.w {
                 if self.cur[y][x] == self.prev[y][x] {
-                    x += 1;
+                    // 未变化的格子：跳过（全角字符与其占位格一起跳过）
+                    if char_width(self.cur[y][x].ch) == 2 {
+                        x += 2;
+                    } else {
+                        x += 1;
+                    }
                     continue;
                 }
                 let cell = self.cur[y][x];
@@ -180,9 +185,19 @@ impl Canvas {
                     buf.push('m');
                     last_bg = Some(bg8);
                 }
+                // 画布模型与终端列 1:1 对应（全角字符在画布里占 2 格，
+                // 占位格已被字符覆盖，输出时跳过即可，无需额外补偿）。
                 buf.push_str(&format!("\x1b[{};{}H", y + 1, x + 1));
-                for c in &self.cur[y][x..x2] {
-                    buf.push(c.ch);
+                // 逐格输出；全角字符输出后其占位格已被覆盖，跳过不写
+                let mut xi = x;
+                while xi < x2 {
+                    let cc = self.cur[y][xi];
+                    buf.push(cc.ch);
+                    if char_width(cc.ch) == 2 {
+                        xi += 2;
+                    } else {
+                        xi += 1;
+                    }
                 }
                 x = x2;
             }
@@ -293,6 +308,45 @@ mod tests {
         out.clear();
         c.flush(&mut out).unwrap();
         assert!(String::from_utf8_lossy(&out).contains("3;6H"));
+    }
+
+    #[test]
+    fn flush_cjk_no_filler_gaps() {
+        let mut c = Canvas::new(30, 2);
+        let mut out = Vec::new();
+        // "贪吃蛇" 3 个全角字符占画布 6 格(含占位格), 后面接 ASCII
+        c.put_str(0, 0, "贪吃蛇 SNAKE", Color::AnsiValue(46), Color::Reset);
+        // 同一行画布列 12 处用不同颜色写 XY → 触发新的 run
+        c.put(12, 0, 'X', Color::AnsiValue(196), Color::Reset);
+        c.put(13, 0, 'Y', Color::AnsiValue(196), Color::Reset);
+        c.flush(&mut out).unwrap();
+        let s = String::from_utf8_lossy(&out);
+        // 全角字符之间不能有占位空格（旧的 bug: "贪 吃 蛇"）
+        assert!(s.contains("贪吃蛇 SNAKE"), "全角字符间不应有空格: {:?}", s);
+        assert!(!s.contains("贪 吃"), "存在占位空格: {:?}", s);
+        // 同一行内后续 run 定位: 画布列与终端列 1:1 (占位格已覆盖), XY 在画布列 12 → 终端列 13
+        assert!(s.contains("1;13HXY"), "后续 run 定位错误: {:?}", s);
+        // 第 1 行从第 1 列开始
+        assert!(s.contains("1;1H"), "首个 run 定位错误: {:?}", s);
+    }
+
+    #[test]
+    fn flush_cjk_diff_update() {
+        // 文本变短时, 旧的全角字形应被清除, 且后续定位正确
+        let mut c = Canvas::new(30, 1);
+        let mut out = Vec::new();
+        c.put_str(0, 0, "贪吃蛇", Color::AnsiValue(46), Color::Reset);
+        c.flush(&mut out).unwrap();
+        out.clear();
+        // 重画为更短的文本
+        c.clear();
+        c.put_str(0, 0, "贪", Color::AnsiValue(46), Color::Reset);
+        c.flush(&mut out).unwrap();
+        let s = String::from_utf8_lossy(&out);
+        // "贪" 与首帧相同, 无需重画; 只需把旧字形"吃蛇"区域清掉
+        // 清除 run 定位: 画布列 2 → 终端列 3
+        assert!(s.contains("1;3H"), "旧字形清除位置错误: {:?}", s);
+        assert!(!s.contains("吃"), "不应重画未变化的字形: {:?}", s);
     }
 
     #[test]

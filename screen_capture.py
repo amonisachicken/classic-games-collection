@@ -63,7 +63,11 @@ class Term:
     def put(self, ch):
         if 0 <= self.cy < self.h and 0 <= self.cx < self.w:
             self.grid[self.cy][self.cx] = (ch, self.fg, self.bg)
-        self.cx += 1
+            # 全角字符在终端占 2 列：右半格被覆盖（写入哨兵）
+            if is_wide(ch) and self.cx + 1 < self.w:
+                self.grid[self.cy][self.cx + 1] = ("\x00", self.fg, self.bg)
+        # 全角字符在终端占 2 列
+        self.cx += 2 if is_wide(ch) else 1
 
     def csi(self, params, final):
         if params.startswith("?"):
@@ -97,24 +101,18 @@ class Term:
         # 其他序列忽略
 
     def render_text(self):
+        # 全角字符占 2 列：打印后跳过其右半格（终端里被字符覆盖）
         lines = []
-        wide_next = False
         for row in self.grid:
             line = ""
             skip = False
             for (ch, fg, bg) in row:
-                if skip:
+                if ch == "\x00" or skip:
                     skip = False
                     continue
-                if ch == " " and bg is None:
-                    line += " "
-                    continue
-                # 合并全角占位：若当前是全角字符且下一格是它的占位空格
-                if is_wide(ch) and True:
-                    line += ch
-                    skip = True  # 下一格是占位空格，跳过
-                else:
-                    line += ch
+                line += ch
+                if is_wide(ch):
+                    skip = True
             lines.append(line.rstrip())
         return "\n".join(lines)
 
