@@ -1,0 +1,289 @@
+//! 打砖块：接住小球，打碎所有砖块。三命，球落底失命。
+
+use crate::app::Engine;
+use crate::canvas::{col, str_width, Canvas};
+use crate::games::{Game, GameOutcome, Status};
+use crate::input::Action;
+use crate::score::ScoreFile;
+
+/// 场地几何（单元 = 1 字符格）。
+/// 左墙 x=0，右墙 x=41；砖块区列 1..=40，行 1..=6。
+const FIELD_W: usize = 42;
+const FIELD_H: usize = 24;
+const BRICK_COLS: usize = 10;
+const BRICK_ROWS: usize = 6;
+const BRICK_W: f64 = 3.0;
+const PADDLE_W: f64 = 7.0;
+const PADDLE_Y: f64 = 21.0;
+const MAX_LIVES: i32 = 3;
+
+const BRICK_COLORS: [crossterm::style::Color; BRICK_ROWS] = [
+    col::RED,
+    col::ORANGE,
+    col::YELLOW,
+    col::GREEN,
+    col::CYAN,
+    col::BLUE,
+];
+
+pub struct Breakout {
+    bricks: Vec<Vec<bool>>, // [row][col]
+    bricks_left: usize,
+    px: f64, // 挡板左端 x
+    left_held: bool,
+    right_held: bool,
+    /// None = 待发球（球在挡板上）
+    ball: Option<(f64, f64, f64, f64)>, // x, y, dx, dy
+    speed: f64,
+    lives: i32,
+    score: u32,
+    ready: bool,
+    over: bool,
+}
+
+impl Breakout {
+    pub fn new() -> Self {
+        let bricks = vec![vec![true; BRICK_COLS]; BRICK_ROWS];
+        Breakout {
+            bricks_left: BRICK_COLS * BRICK_ROWS,
+            bricks,
+            px: (FIELD_W as f64 - PADDLE_W) / 2.0,
+            left_held: false,
+            right_held: false,
+            ball: None,
+            speed: 7.5,
+            lives: MAX_LIVES,
+            score: 0,
+            ready: true,
+            over: false,
+        }
+    }
+
+    fn brick_cell(&self, row: usize, col: usize) -> (f64, f64, f64, f64) {
+        // 返回 (x0, y0, x1, y1) 闭区间
+        let x0 = 1.0 + col as f64 * (BRICK_W + 1.0);
+        let y0 = 1.0 + row as f64;
+        (x0, y0, x0 + BRICK_W, y0 + 1.0)
+    }
+
+    fn brick_at(&self, bx: f64, by: f64) -> Option<(usize, usize)> {
+        if !(1.0..=40.0).contains(&bx) || !(1.0..=6.0).contains(&by) {
+            return None;
+        }
+        // 砖块列: x0 = 1 + c*4 → c = (x-1)/4 向下取整
+        let c = ((bx - 1.0) / 4.0).floor() as i64;
+        let r = (by - 1.0).floor() as i64;
+        if r >= 0 && r < BRICK_ROWS as i64 && c >= 0 && c < BRICK_COLS as i64 {
+            let (r, c) = (r as usize, c as usize);
+            if self.bricks[r][c] {
+                return Some((r, c));
+            }
+        }
+        None
+    }
+
+    fn launch(&mut self) {
+        if !self.ready || self.ball.is_some() {
+            return;
+        }
+        let bx = self.px + PADDLE_W / 2.0;
+        let by = PADDLE_Y - 0.8;
+        self.ball = Some((bx, by, 0.0, -1.0));
+        self.ready = false;
+    }
+
+    fn reset_ball(&mut self) {
+        self.ball = None;
+        self.ready = true;
+    }
+
+    fn move_paddle(&mut self, dt: f64) {
+        let dir = (self.right_held as i32 - self.left_held as i32) as f64;
+        if dir == 0.0 {
+            return;
+        }
+        let mut nx = self.px + dir * 26.0 * dt;
+        nx = nx.clamp(1.0, FIELD_W as f64 - 1.0 - PADDLE_W);
+        self.px = nx;
+        // 待发球时球跟随挡板（在 step_ball 里处理）
+    }
+
+    fn step_ball(&mut self, dt: f64) {
+        let mut b = match self.ball {
+            Some(b) => b,
+            None => return,
+        };
+        if self.ready {
+            // 球在挡板上跟随
+            b.0 = self.px + PADDLE_W / 2.0;
+            b.1 = PADDLE_Y - 0.8;
+            self.ball = Some(b);
+            return;
+        }
+        let (mut bx, mut by, mut dx, mut dy) = b;
+        // 速度归一
+        let sp = self.speed;
+        let len = (dx * dx + dy * dy).sqrt().max(0.001);
+        dx = dx / len * sp;
+        dy = dy / len * sp;
+
+        // 拆分步进，防止高速穿透（每步不超过 0.35 格）
+        let steps = ((sp * dt) / 0.35).ceil().max(1.0) as u32;
+        let sdt = dt / steps as f64;
+        for _ in 0..steps {
+            bx += dx * sdt;
+            by += dy * sdt;
+            // 左右墙
+            if bx <= 1.0 {
+                bx = 1.0;
+                dx = dx.abs();
+            } else if bx >= 40.0 {
+                bx = 40.0;
+                dx = -dx.abs();
+            }
+            // 顶墙
+            if by <= 1.0 {
+                by = 1.0;
+                dy = dy.abs();
+            }
+            // 挡板
+            if dy > 0.0 && by >= PADDLE_Y - 0.6 && by <= PADDLE_Y + 0.6
+                && bx >= self.px - 0.4 && bx <= self.px + PADDLE_W + 0.4
+            {
+                let rel = ((bx - (self.px + PADDLE_W / 2.0)) / (PADDLE_W / 2.0)).clamp(-1.0, 1.0);
+                dx = rel * 2.6;
+                dy = -1.0;
+                by = PADDLE_Y - 0.8;
+                let len = (dx * dx + dy * dy).sqrt();
+                dx = dx / len * sp;
+                dy = dy / len * sp;
+            }
+            // 砖块
+            if let Some((r, c)) = self.brick_at(bx, by) {
+                let (x0, y0, x1, y1) = self.brick_cell(r, c);
+                let cx = (x0 + x1) / 2.0;
+                let cy = (y0 + y1) / 2.0;
+                self.bricks[r][c] = false;
+                self.bricks_left -= 1;
+                self.score += 10;
+                self.speed = (7.5 + self.score as f64 * 0.012).min(12.0);
+                if (bx - cx).abs() > (by - cy).abs() {
+                    dx = if bx < cx { -dx.abs() } else { dx.abs() };
+                    // 推离砖块
+                    bx = if dx < 0.0 { x0 - 0.1 } else { x1 + 0.1 };
+                } else {
+                    dy = if by < cy { -dy.abs() } else { dy.abs() };
+                    by = if dy < 0.0 { y0 - 0.1 } else { y1 + 0.1 };
+                }
+                if self.bricks_left == 0 {
+                    self.score += 100;
+                    self.over = true;
+                    self.ball = None;
+                    return;
+                }
+            }
+            // 落底
+            if by > FIELD_H as f64 + 1.0 {
+                self.lives -= 1;
+                if self.lives <= 0 {
+                    self.over = true;
+                    self.ball = None;
+                    return;
+                }
+                self.reset_ball();
+                return;
+            }
+        }
+        self.ball = Some((bx, by, dx, dy));
+    }
+}
+
+impl Game for Breakout {
+    fn update(&mut self, dt: f64, _eng: &mut Engine) {
+        if self.over {
+            return;
+        }
+        self.move_paddle(dt);
+        self.step_ball(dt);
+    }
+
+    fn handle(&mut self, a: Action, _eng: &mut Engine) {
+        if self.over {
+            return;
+        }
+        match a {
+            Action::Left => self.left_held = true,
+            Action::Right => self.right_held = true,
+            Action::ReleaseLeft => self.left_held = false,
+            Action::ReleaseRight => self.right_held = false,
+            Action::Space | Action::Confirm => {
+                if self.ready {
+                    self.launch();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn draw(&self, c: &mut Canvas, scores: &ScoreFile, _user: &str) {
+        c.fill_rect(0, 0, c.w, c.h, ' ', col::BLACK, col::BLACK);
+        let ox = c.w.saturating_sub(FIELD_W) / 2;
+        let oy = c.h.saturating_sub(FIELD_H) / 2;
+        // 边框
+        c.border(ox, oy, FIELD_W, FIELD_H, col::CYAN);
+        // 砖块
+        for r in 0..BRICK_ROWS {
+            for col in 0..BRICK_COLS {
+                if !self.bricks[r][col] {
+                    continue;
+                }
+                let (x0, y0, x1, _y1) = self.brick_cell(r, col);
+                for x in (x0 as usize)..=(x1 as usize) {
+                    c.put(ox + x, oy + y0 as usize, '█', BRICK_COLORS[r], col::BLACK);
+                }
+            }
+        }
+        // 挡板
+        for i in 0..PADDLE_W as usize {
+            c.put(ox + self.px as usize + i, oy + PADDLE_Y as usize, '=', col::YELLOW, col::BLACK);
+        }
+        // 球
+        if let Some((bx, by, _, _)) = self.ball {
+            c.put(ox + bx as usize, oy + by as usize, '●', col::WHITE, col::BLACK);
+        }
+        // 面板
+        let title = "打砖块 BREAKOUT";
+        let score = format!("得分 {}", self.score);
+        let lives = format!("生命 {}", "♥".repeat(self.lives.max(0) as usize));
+        let high = scores
+            .get_vec("breakout")
+            .first()
+            .map(|e| format!("最高 {} ({})", e.score, e.user))
+            .unwrap_or_else(|| "暂无纪录".to_string());
+        let py = oy.saturating_sub(2);
+        c.put_str(ox, py, title, col::YELLOW, col::BLACK);
+        c.put_str(ox, py + 1, &score, col::GREEN, col::BLACK);
+        c.put_str(ox + str_width(&score) + 2, py + 1, &lives, col::RED, col::BLACK);
+        let hx = ox + FIELD_W - str_width(&high);
+        c.put_str(hx, py, &high, col::GRAY, col::BLACK);
+
+        let help = if self.ready && self.ball.is_none() {
+            "←→/HL 移动    空格 发球    ESC/Q 菜单"
+        } else {
+            "←→/HL 移动    ESC/Q 菜单"
+        };
+        c.put_str(ox, oy + FIELD_H + 1, help, col::GRAY, col::BLACK);
+    }
+
+    fn status(&self) -> Status {
+        if self.over {
+            Status::Finished
+        } else {
+            Status::Running
+        }
+    }
+
+    fn outcome(&self) -> GameOutcome {
+        GameOutcome::Score(self.score)
+    }
+}
