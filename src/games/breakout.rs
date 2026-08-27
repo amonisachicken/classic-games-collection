@@ -9,9 +9,10 @@ use crate::score::ScoreFile;
 
 /// 场地几何（单元 = 1 字符格）。
 /// 左墙 x=0，右墙 x=41；砖块区列 1..=40，行 1..=6。
-const FIELD_W: usize = 42;
+const FIELD_W: usize = 38; // 9 列砖块 × 4 格 = 36 格场地 + 左右墙
+// 每个游戏格占 2 半角字符(方块像素), 场地宽 = 38×2 = 76 字符
 const FIELD_H: usize = 24;
-const BRICK_COLS: usize = 10;
+const BRICK_COLS: usize = 9;
 const BRICK_ROWS: usize = 6;
 const BRICK_W: f64 = 3.0;
 const PADDLE_W: f64 = 7.0;
@@ -145,8 +146,8 @@ impl Breakout {
             if bx <= 1.0 {
                 bx = 1.0;
                 dx = dx.abs();
-            } else if bx >= 40.0 {
-                bx = 40.0;
+            } else if bx >= 36.0 {
+                bx = 36.0;
                 dx = -dx.abs();
             }
             // 顶墙
@@ -234,10 +235,10 @@ impl Game for Breakout {
 
     fn draw(&self, c: &mut Canvas, scores: &ScoreFile, _user: &str) {
         c.fill_rect(0, 0, c.w, c.h, ' ', col::BLACK, col::BLACK);
-        let ox = c.w.saturating_sub(FIELD_W) / 2;
+        let ox = c.w.saturating_sub(FIELD_W * 2) / 2;
         let oy = c.h.saturating_sub(FIELD_H) / 2;
         // 边框
-        c.border(ox, oy, FIELD_W, FIELD_H, col::CYAN);
+        c.border(ox, oy, FIELD_W * 2, FIELD_H, col::CYAN);
         // 砖块
         for r in 0..BRICK_ROWS {
             for col in 0..BRICK_COLS {
@@ -246,17 +247,17 @@ impl Game for Breakout {
                 }
                 let (x0, y0, x1, _y1) = self.brick_cell(r, col);
                 for x in (x0 as usize)..=(x1 as usize) {
-                    c.put(ox + x, oy + y0 as usize, '█', BRICK_COLORS[r], col::BLACK);
+                    c.put_block(ox + x * 2, oy + y0 as usize, BRICK_COLORS[r], col::BLACK);
                 }
             }
         }
         // 挡板
         for i in 0..PADDLE_W as usize {
-            c.put(ox + self.px as usize + i, oy + PADDLE_Y as usize, '=', col::YELLOW, col::BLACK);
+            c.put_block(ox + (self.px as usize + i) * 2, oy + PADDLE_Y as usize, col::YELLOW, col::BLACK);
         }
         // 球
         if let Some((bx, by, _, _)) = self.ball {
-            c.put(ox + bx as usize, oy + by as usize, '●', col::WHITE, col::BLACK);
+            c.put(ox + (bx as usize) * 2, oy + by as usize, '●', col::WHITE, col::BLACK);
         }
         // 面板
         let title = lang::ui().breakout_title;
@@ -271,7 +272,7 @@ impl Game for Breakout {
         c.put_str(ox, py, title, col::YELLOW, col::BLACK);
         c.put_str(ox, py + 1, &score, col::GREEN, col::BLACK);
         c.put_str(ox + str_width(&score) + 2, py + 1, &lives, col::RED, col::BLACK);
-        let hx = ox + FIELD_W - str_width(&high);
+        let hx = ox + FIELD_W * 2 - str_width(&high);
         c.put_str(hx, py, &high, col::GRAY, col::BLACK);
 
         let help = if self.ready && self.ball.is_none() {
