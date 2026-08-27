@@ -87,6 +87,21 @@ src/
     └── gomoku.rs   # 五子棋（含启发式 AI 与胜败统计）· Gomoku (heuristic AI + W/L stats)
 ```
 
+## 发布与下载 / Releases
+
+打 `v*` 标签即可触发 CI 构建并发布各平台二进制到 [GitHub Releases](https://github.com/amonisachicken/classic-games-collection/releases)：
+
+Tag a `v*` tag to trigger CI and publish binaries for all platforms to [GitHub Releases](https://github.com/amonisachicken/classic-games-collection/releases):
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+- Linux (x86_64 / aarch64)、macOS (Intel / Apple Silicon)、Windows (x86_64)
+- 附 SHA256SUMS.txt 校验和；macOS 首次运行需在“系统设置 → 隐私与安全性”允许（未签名应用），Windows 可能提示 SmartScreen
+- SHA256SUMS.txt checksums included; macOS: allow via System Settings → Privacy & Security (unsigned app); Windows: SmartScreen may prompt
+
 ## 开发辅助脚本 / Dev Scripts
 
 - `smoke_test.py` — 伪终端自动化冒烟测试（含中英文两种模式）。PTY smoke test (Chinese & English modes).
