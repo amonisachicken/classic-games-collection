@@ -269,28 +269,8 @@ impl Game for Plane {
             }
         }
 
-        // 敌机飞出底部（炸弹命中基地）
-        let mut bottom: Vec<usize> = Vec::new();
-        for (ei, e) in self.enemies.iter().enumerate() {
-            if e.y > FH - 1.0 {
-                bottom.push(ei);
-            }
-        }
-        for &ei in bottom.iter().rev() {
-            if ei < self.enemies.len() {
-                let e = self.enemies[ei];
-                self.explode(e.x, FH - 1.0);
-                self.enemies.remove(ei);
-                if !self.over {
-                    self.lives -= 1;
-                    self.invuln = 1.3;
-                    if self.lives <= 0 {
-                        self.over = true;
-                        return;
-                    }
-                }
-            }
-        }
+        // 敌机飞出底部：直接离场，不扣生命（只有被敌弹击中或与敌机相撞才受伤）
+        self.enemies.retain(|e| e.y <= FH - 1.0);
 
         // 爆炸动画
         for e in self.explosions.iter_mut() {
@@ -428,5 +408,52 @@ mod tests {
         g.handle(Action::Space, &mut eng);
         g.update(0.05, &mut eng);
         assert!(g.bullets.len() > n1, "再次点按应能开火");
+    }
+
+    #[test]
+    fn enemy_exiting_bottom_does_not_damage() {
+        let mut scores = ScoreFile::default();
+        let mut eng = new_engine(&mut scores);
+        let mut g = Plane::new();
+        g.lives = 3;
+        g.spawn_acc = 0.0; // 测试期间不生成新敌机
+        // 放一架即将飞出底部的敌机（没碰到玩家、没开火）
+        g.enemies.push(Enemy {
+            x: 10.0,
+            y: FH - 0.5,
+            hp: 1,
+            kind: 0,
+            speed: 2.0,
+            shoot_acc: 100.0, // 不射击
+        });
+        g.update(1.0, &mut eng); // 敌机越过底部
+        assert_eq!(g.lives, 3, "敌机飞出底部不应扣生命");
+        assert!(g.enemies.is_empty(), "飞出底部的敌机应离场");
+        assert!(!g.over, "不应因此游戏结束");
+    }
+
+    #[test]
+    fn only_collision_or_bullet_damages() {
+        let mut scores = ScoreFile::default();
+        let mut eng = new_engine(&mut scores);
+        let mut g = Plane::new();
+        g.lives = 3;
+        g.spawn_acc = 0.0;
+        // 敌弹击中玩家 → 扣命
+        g.ebullets.push((g.px, g.py - 1.0));
+        g.update(0.1, &mut eng);
+        assert_eq!(g.lives, 2, "被敌弹击中应扣命");
+        // 敌机相撞 → 扣命
+        g.enemies.push(Enemy {
+            x: g.px,
+            y: g.py,
+            hp: 1,
+            kind: 0,
+            speed: 0.0,
+            shoot_acc: 100.0,
+        });
+        g.invuln = 0.0;
+        g.update(0.05, &mut eng);
+        assert_eq!(g.lives, 1, "与敌机相撞应扣命");
     }
 }
